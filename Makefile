@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-xlnetacc
-PKG_VERSION:=1.17
+PKG_VERSION:=1.18
 PKG_RELEASE:=1
 
 PKG_LICENSE:=GPLv2
@@ -15,7 +15,7 @@ define Package/$(PKG_NAME)
 	SUBMENU:=3. Applications
 	TITLE:=LuCI Support for XLNetAcc
 	PKGARCH:=all
-	DEPENDS:=+jshn +openssl-util
+	DEPENDS:=+jshn +openssl-util +tesseract +tesseract-data-eng
 endef
 
 define Package/$(PKG_NAME)/description
