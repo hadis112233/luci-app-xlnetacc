@@ -48,15 +48,15 @@ o = s:option(Value, "account", translate("XLNetAcc account"))
 o = s:option(Value, "password", translate("XLNetAcc password"))
 o.password = true
 
-o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("If tesseract is installed on the router it is used first (offline); otherwise it falls back to the AI service below; if no API Key is set, manual input is used."))
-o.default = translate("Local OCR first -> AI service -> manual input")
-o = s:option(Value, "base_url", translate("Captcha AI Base URL"), translate("Endpoint base URL for captcha recognition, default uses Agnes."))
+o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("Recognition order: AI service (when API Key is set) -> local tesseract OCR -> manual input. The captcha image is automatically denoised before recognition."))
+o.default = translate("AI service -> Local OCR -> manual input")
+o = s:option(Value, "base_url", translate("Captcha AI Base URL"), translate("OpenAI-compatible endpoint base URL. Free options: Gemini / OpenRouter / Qwen, see README for details."))
 o.placeholder = "https://apihub.agnes-ai.com/v1"
 
 o = s:option(Value, "api_key", translate("Captcha AI API Key"), translate("Leave empty to switch back to manual captcha input."))
 o.password = true
 
-o = s:option(Value, "model", translate("Captcha AI Model"), translate("Model name for captcha recognition."))
+o = s:option(Value, "model", translate("Captcha AI Model"), translate("Model name, e.g. gemini-2.5-flash, qwen-vl-plus, agnes-2.5-flash."))
 o.placeholder = "agnes-2.5-flash"
 
 return m

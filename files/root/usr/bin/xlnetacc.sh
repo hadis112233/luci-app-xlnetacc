@@ -198,33 +198,33 @@ swjsq_get_verify_code() {
 	rm -f "$header_file"
 }
 
-# 使用 AI 识别验证码
-swjsq_recognize() {
-	local image_file=$1
-	[ -s "$image_file" ] || return 1
-
-	# 本地 OCR 优先：若路由器已安装 tesseract 则离线识别，否则回退 AI/手动
-	if command -v tesseract >/dev/null 2>&1; then
-		# 自动定位 tessdata 目录，避免 TESSDATA_PREFIX 未设置导致无法加载语言数据
-		if [ -z "$TESSDATA_PREFIX" ] || [ ! -f "$TESSDATA_PREFIX/eng.traineddata" ]; then
-			for tessdata_dir in /usr/share/tessdata /usr/share/tesseract/tessdata /usr/share/tesseract-ocr/4.00/tessdata /usr/share/tesseract-ocr/5/tessdata /usr/lib/tesseract/tessdata; do
-				if [ -f "$tessdata_dir/eng.traineddata" ]; then
-					export TESSDATA_PREFIX="$tessdata_dir"
-					break
-				fi
-			done
-		fi
-		local ocr_code
-		ocr_code=$(tesseract "$image_file" stdout --psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)
-		ocr_code=$(echo "$ocr_code" | tr -dc 'A-Za-z0-9')
-		if [ -n "$ocr_code" ]; then
-			_log "本地 OCR 识别验证码: $ocr_code"
-			echo -n "$ocr_code"
-			return 0
-		fi
-		_log "本地 OCR 识别失败，改用 AI 识别"
+# 验证码图片预处理：放大3倍 + 灰度 + 阈值去噪（保留亮色字符，去除暗色干扰线），输出黑白图
+# 依赖 ImageMagick（convert/magick），缺失时退回原图
+xlnetacc_clean_image() {
+	local src=$1 dst=$2
+	[ -s "$src" ] || return 1
+	local conv
+	if command -v convert >/dev/null 2>&1; then
+		conv=convert
+	elif command -v magick >/dev/null 2>&1; then
+		conv=magick
 	fi
+	if [ -n "$conv" ]; then
+		$conv "$src" -colorspace Gray -filter Lanczos -resize 300% -threshold 58% -negate "$dst" 2>/dev/null
+		[ -s "$dst" ] && return 0
+	fi
+	cp "$src" "$dst" 2>/dev/null
+	[ -s "$dst" ]
+}
 
+# 规范化验证码：只保留字母数字并统一转大写（快鸟验证码为4位字母数字混合，不区分大小写）
+xlnetacc_normalize_code() {
+	echo "$1" | tr -dc 'A-Za-z0-9' | tr 'a-z' 'A-Z'
+}
+
+# 调用 AI 视觉模型识别验证码（OpenAI 兼容接口：{base_url}/chat/completions）
+xlnetacc_ai_recognize() {
+	local image_file=$1
 	[ -z "$chatgpt_api_key" ] && return 2
 
 	local endpoint="${chatgpt_base_url:-https://apihub.agnes-ai.com/v1}"
@@ -237,6 +237,10 @@ swjsq_recognize() {
 	local img_base64=$(base64 "$image_file" | tr -d '\n')
 	[ -z "$img_base64" ] && return 1
 
+	# 按文件头判断 MIME（预处理后是 PNG，未装 ImageMagick 时是原图 JPEG）
+	local mime="image/jpeg"
+	[ "$(head -c 4 "$image_file" | od -An -tx1 | tr -d ' \n')" = "89504e47" ] && mime="image/png"
+
 	local payload="/tmp/xlnetacc_chat_payload.json"
 	cat > "$payload" <<-EOF
 	{
@@ -245,8 +249,8 @@ swjsq_recognize() {
 	    {
 	      "role": "user",
 	      "content": [
-	        { "type": "text", "text": "识别图片中的验证码，仅返回验证码字符，勿添加其他内容。" },
-	        { "type": "image_url", "image_url": { "url": "data:image/jpeg;base64,$img_base64" } }
+	        { "type": "text", "text": "这是迅雷登录的图形验证码，图片中有 4 个字符（大写字母 A-Z 或数字 0-9）。请只输出这 4 个字符，例如输出：3K7H。不要输出任何其他内容或解释。" },
+	        { "type": "image_url", "image_url": { "url": "data:$mime;base64,$img_base64" } }
 	      ]
 	    }
 	  ],
@@ -284,11 +288,60 @@ swjsq_recognize() {
 	json_select ".." >/dev/null 2>&1
 	[ -z "$content" ] && { _log "AI 未识别出验证码内容"; return 1; }
 	content=$(echo "$content" | tr -d '\r' | head -n 1)
-	content=$(echo "$content" | tr -d ' \t\r\n')
+	content=$(xlnetacc_normalize_code "$content")
+	# 快鸟验证码固定 4 位，长度不对视为识别失败（自动重新获取验证码重试）
+	if [ "${#content}" -ne 4 ]; then
+		_log "AI 识别结果无效: $content"
+		return 1
+	fi
 	echo -n "$content"
 	return 0
 }
 
+# 识别验证码：优先 AI（配置了 API Key 时，视觉模型比本地 OCR 更准），其次本地 tesseract OCR
+swjsq_recognize() {
+	local image_file=$1
+	[ -s "$image_file" ] || return 1
+
+	# 先做图像预处理（去噪），提升 tesseract 和 AI 的识别率
+	local clean_file="/tmp/xlnetacc_verify_clean.png"
+	xlnetacc_clean_image "$image_file" "$clean_file" || return 1
+
+	# 1) AI 识别
+	if [ -n "$chatgpt_api_key" ]; then
+		local ai_code
+		ai_code=$(xlnetacc_ai_recognize "$clean_file")
+		if [ -n "$ai_code" ]; then
+			_log "AI 识别验证码: $ai_code"
+			echo -n "$ai_code"
+			return 0
+		fi
+	fi
+
+	# 2) 本地 OCR（tesseract），自动定位 tessdata 目录
+	if command -v tesseract >/dev/null 2>&1; then
+		if [ -z "$TESSDATA_PREFIX" ] || [ ! -f "$TESSDATA_PREFIX/eng.traineddata" ]; then
+			for tessdata_dir in /usr/share/tessdata /usr/share/tesseract/tessdata /usr/share/tesseract-ocr/4.00/tessdata /usr/share/tesseract-ocr/5/tessdata /usr/lib/tesseract/tessdata; do
+				if [ -f "$tessdata_dir/eng.traineddata" ]; then
+					export TESSDATA_PREFIX="$tessdata_dir"
+					break
+				fi
+			done
+		fi
+		local ocr_code
+		ocr_code=$(tesseract "$clean_file" stdout --psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)
+		[ -z "$ocr_code" ] && ocr_code=$(tesseract "$clean_file" stdout --psm 8 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)
+		ocr_code=$(xlnetacc_normalize_code "$ocr_code")
+		if [ "${#ocr_code}" -eq 4 ]; then
+			_log "本地 OCR 识别验证码: $ocr_code"
+			echo -n "$ocr_code"
+			return 0
+		fi
+		_log "本地 OCR 识别失败"
+	fi
+
+	return 2
+}
 # 自动识别验证码并重试登录
 swjsq_auto_verify() {
 	local verify_type=$1

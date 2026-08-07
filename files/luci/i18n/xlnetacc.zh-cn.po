@@ -126,3 +126,14 @@ msgstr "无日志数据。"
 
 msgid "Error get log data."
 msgstr "获取日志数据失败。"
+msgid "Recognition order: AI service (when API Key is set) -> local tesseract OCR -> manual input. The captcha image is automatically denoised before recognition."
+msgstr "识别顺序：AI 服务（配置了 API Key 时）-> 本地 tesseract OCR -> 手动输入。识别前会自动对验证码图片去噪。"
+
+msgid "AI service -> Local OCR -> manual input"
+msgstr "AI 服务 -> 本地 OCR -> 手动输入"
+
+msgid "OpenAI-compatible endpoint base URL. Free options: Gemini / OpenRouter / Qwen, see README for details."
+msgstr "OpenAI 兼容接口的基础地址。免费可选：Gemini / OpenRouter / 通义千问，详见 README。"
+
+msgid "Model name, e.g. gemini-2.5-flash, qwen-vl-plus, agnes-2.5-flash."
+msgstr "模型名称，例如 gemini-2.5-flash、qwen-vl-plus、agnes-2.5-flash。"
