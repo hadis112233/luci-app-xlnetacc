@@ -218,13 +218,13 @@ swjsq_recognize() {
 
 	[ -z "$chatgpt_api_key" ] && return 2
 
-	local endpoint="${chatgpt_base_url:-https://openrouter.ai/api/v1}"
+	local endpoint="${chatgpt_base_url:-https://apihub.agnes-ai.com/v1}"
 	case "$endpoint" in
 		*/chat/completions) ;;
 		*/) endpoint="${endpoint}chat/completions";;
 		*) endpoint="${endpoint%/}/chat/completions";;
 	esac
-	local model="${chatgpt_model:-google/gemini-2.0-flash-exp:free}"
+	local model="${chatgpt_model:-agnes-2.5-flash}"
 	local img_base64=$(base64 "$image_file" | tr -d '\n')
 	[ -z "$img_base64" ] && return 1
 
@@ -801,16 +801,16 @@ xlnetacc_init() {
 	up_acc=$(uci_get_by_bool "general" "up_acc" 0)
 	readonly logging=$(uci_get_by_bool "general" "logging" 1)
 	readonly verbose=$(uci_get_by_bool "general" "verbose" 0)
-	network=$(uci_get_by_name "general" "network" "wan")
+	network=$(uci_get_by_name "general" "network" "lan")
 	keepalive=$(uci_get_by_name "general" "keepalive" 10)
 	relogin=$(uci_get_by_name "general" "relogin" 0)
 	readonly username=$(uci_get_by_name "general" "account")
 	readonly password=$(uci_get_by_name "general" "password")
-	chatgpt_base_url=$(uci_get_by_name "general" "base_url" "https://openrouter.ai/api/v1")
-	chatgpt_model=$(uci_get_by_name "general" "model" "google/gemini-2.0-flash-exp:free")
+	chatgpt_base_url=$(uci_get_by_name "general" "base_url" "https://apihub.agnes-ai.com/v1")
+	chatgpt_model=$(uci_get_by_name "general" "model" "agnes-2.5-flash")
 	chatgpt_api_key=$(uci_get_by_name "general" "api_key")
-	[ -z "$chatgpt_base_url" ] && chatgpt_base_url="https://openrouter.ai/api/v1"
-	[ -z "$chatgpt_model" ] && chatgpt_model="google/gemini-2.0-flash-exp:free"
+	[ -z "$chatgpt_base_url" ] && chatgpt_base_url="https://apihub.agnes-ai.com/v1"
+	[ -z "$chatgpt_model" ] && chatgpt_model="agnes-2.5-flash"
 	local enabled=$(uci_get_by_bool "general" "enabled" 0)
 	([ $enabled -eq 0 ] || [ $down_acc -eq 0 -a $up_acc -eq 0 ] || [ -z "$username" -o -z "$password" -o -z "$network" ]) && return 2
 	([ -z "$keepalive" -o -n "${keepalive//[0-9]/}" ] || [ $keepalive -lt 5 -o $keepalive -gt 60 ]) && keepalive=10

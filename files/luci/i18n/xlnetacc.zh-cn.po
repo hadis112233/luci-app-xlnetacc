@@ -79,8 +79,8 @@ msgstr "迅雷快鸟密码"
 msgid "Captcha AI Base URL"
 msgstr "验证码识别 Base URL"
 
-msgid "Endpoint base URL for captcha recognition, default uses OpenRoute."
-msgstr "验证码识别服务的基础地址，默认使用 OpenRoute。"
+msgid "Endpoint base URL for captcha recognition, default uses Agnes."
+msgstr "验证码识别服务的基础地址，默认使用 Agnes。"
 
 msgid "Captcha AI API Key"
 msgstr "验证码识别 API Key"

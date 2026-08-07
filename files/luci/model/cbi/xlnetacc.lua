@@ -50,13 +50,13 @@ o.password = true
 
 o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("If tesseract-ocr is installed on the router it is used first (offline); otherwise it falls back to the AI service below; if no API Key is set, manual input is used."))
 o.default = translate("Local OCR first -> AI service -> manual input")
-o = s:option(Value, "base_url", translate("Captcha AI Base URL"), translate("Endpoint base URL for captcha recognition, default uses OpenRoute."))
-o.placeholder = "https://openrouter.ai/api/v1"
+o = s:option(Value, "base_url", translate("Captcha AI Base URL"), translate("Endpoint base URL for captcha recognition, default uses Agnes."))
+o.placeholder = "https://apihub.agnes-ai.com/v1"
 
 o = s:option(Value, "api_key", translate("Captcha AI API Key"), translate("Leave empty to switch back to manual captcha input."))
 o.password = true
 
 o = s:option(Value, "model", translate("Captcha AI Model"), translate("Model name for captcha recognition."))
-o.placeholder = "google/gemini-2.0-flash-exp:free"
+o.placeholder = "agnes-2.5-flash"
 
 return m
