@@ -55,6 +55,9 @@ msgstr "启用详细日志"
 msgid "Upgrade interface"
 msgstr "指定提速接口"
 
+msgid "Normal routers: select wan. Bypass routers (no dialing, traffic via LAN): select lan."
+msgstr "普通拨号路由请选 wan；旁路由（不拨号、流量走 LAN）请选 lan。"
+
 msgid "Keepalive interval"
 msgstr "保持连接周期"
 

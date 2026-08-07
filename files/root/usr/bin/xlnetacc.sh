@@ -801,7 +801,7 @@ xlnetacc_init() {
 	up_acc=$(uci_get_by_bool "general" "up_acc" 0)
 	readonly logging=$(uci_get_by_bool "general" "logging" 1)
 	readonly verbose=$(uci_get_by_bool "general" "verbose" 0)
-	network=$(uci_get_by_name "general" "network" "lan")
+	network=$(uci_get_by_name "general" "network" "wan")
 	keepalive=$(uci_get_by_name "general" "keepalive" 10)
 	relogin=$(uci_get_by_name "general" "relogin" 0)
 	readonly username=$(uci_get_by_name "general" "account")

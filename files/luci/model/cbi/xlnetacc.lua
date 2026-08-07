@@ -21,7 +21,7 @@ o.default = "1"
 o = s:option(Flag, "verbose", translate("Enable verbose logging"))
 o:depends("logging", "1")
 
-o = s:option(ListValue, "network", translate("Upgrade interface"))
+o = s:option(ListValue, "network", translate("Upgrade interface"), translate("Normal routers: select wan. Bypass routers (no dialing, traffic via LAN): select lan."))
 uci:foreach("network", "interface", function(section)
 	if section[".name"] ~= "loopback" then
 		o:value(section[".name"])
