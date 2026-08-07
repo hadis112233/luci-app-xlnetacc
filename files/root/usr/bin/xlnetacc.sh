@@ -250,18 +250,25 @@ swjsq_recognize() {
 	response=$($_http_cmd --header="Content-Type: application/json" --header="Authorization: Bearer $chatgpt_api_key" --post-file="$payload" "$endpoint")
 	local ret=$?
 	rm -f "$payload"
-	[ $ret -ne 0 ] && { _log "验证码识别请求失败" $(( 1 | 4 )); return 1; }
+	if [ $ret -ne 0 ]; then
+		_log "验证码识别请求失败(错误码=$ret)，请检查 base_url/model/api_key/网络"
+		return 1
+	fi
+	[ -z "$response" ] && { _log "验证码识别响应为空"; return 1; }
 
 	local content
 	json_cleanup; json_load "$response" >/dev/null 2>&1
-	json_select "choices" >/dev/null 2>&1 || return 1
-	json_select 1 >/dev/null 2>&1 || return 1
-	json_select "message" >/dev/null 2>&1 || return 1
+	if ! json_select "choices" >/dev/null 2>&1; then
+		_log "验证码识别响应格式异常: $(echo "$response" | head -c 160)"
+		return 1
+	fi
+	json_select 1 >/dev/null 2>&1 || { _log "验证码识别响应缺少结果"; return 1; }
+	json_select "message" >/dev/null 2>&1 || { _log "验证码识别响应缺少 message"; return 1; }
 	json_get_var content "content"
 	json_select ".." >/dev/null 2>&1
 	json_select ".." >/dev/null 2>&1
 	json_select ".." >/dev/null 2>&1
-	[ -z "$content" ] && return 1
+	[ -z "$content" ] && { _log "AI 未识别出验证码内容"; return 1; }
 	content=$(echo "$content" | tr -d '\r' | head -n 1)
 	content=$(echo "$content" | tr -d ' \t\r\n')
 	echo -n "$content"
