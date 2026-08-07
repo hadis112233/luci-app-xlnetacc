@@ -203,8 +203,17 @@ swjsq_recognize() {
 	local image_file=$1
 	[ -s "$image_file" ] || return 1
 
-	# 本地 OCR 优先：若路由器已安装 tesseract-ocr 则离线识别，否则回退 AI/手动
+	# 本地 OCR 优先：若路由器已安装 tesseract 则离线识别，否则回退 AI/手动
 	if command -v tesseract >/dev/null 2>&1; then
+		# 自动定位 tessdata 目录，避免 TESSDATA_PREFIX 未设置导致无法加载语言数据
+		if [ -z "$TESSDATA_PREFIX" ] || [ ! -f "$TESSDATA_PREFIX/eng.traineddata" ]; then
+			for tessdata_dir in /usr/share/tessdata /usr/share/tesseract/tessdata /usr/share/tesseract-ocr/4.00/tessdata /usr/share/tesseract-ocr/5/tessdata /usr/lib/tesseract/tessdata; do
+				if [ -f "$tessdata_dir/eng.traineddata" ]; then
+					export TESSDATA_PREFIX="$tessdata_dir"
+					break
+				fi
+			done
+		fi
 		local ocr_code
 		ocr_code=$(tesseract "$image_file" stdout --psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)
 		ocr_code=$(echo "$ocr_code" | tr -dc 'A-Za-z0-9')
