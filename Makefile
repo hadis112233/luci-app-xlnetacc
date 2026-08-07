@@ -15,7 +15,7 @@ define Package/$(PKG_NAME)
 	SUBMENU:=3. Applications
 	TITLE:=LuCI Support for XLNetAcc
 	PKGARCH:=all
-	DEPENDS:=+jshn +wget +openssl-util +tesseract-ocr +tesseract-ocr-eng
+	DEPENDS:=+jshn +wget +openssl-util
 endef
 
 define Package/$(PKG_NAME)/description

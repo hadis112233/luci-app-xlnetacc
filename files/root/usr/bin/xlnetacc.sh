@@ -203,7 +203,7 @@ swjsq_recognize() {
 	local image_file=$1
 	[ -s "$image_file" ] || return 1
 
-	# 本地 OCR 优先：tesseract-ocr 随插件自动安装（离线识别，无需联网）
+	# 本地 OCR 优先：若路由器已安装 tesseract-ocr 则离线识别，否则回退 AI/手动
 	if command -v tesseract >/dev/null 2>&1; then
 		local ocr_code
 		ocr_code=$(tesseract "$image_file" stdout --psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)

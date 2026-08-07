@@ -33,7 +33,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential clang flex bison gawk gettext \
             libncurses5-dev libssl-dev python3-distutils python3-setuptools \
-            rsync unzip wget
+            rsync unzip wget zlib1g-dev file
 
       - name: Download OpenWrt SDK
         run: |
@@ -78,8 +78,8 @@ jobs:
       - name: Prepare feeds
         run: |
           cd "$SDK_DIR"
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          ./scripts/feeds update packages
+          ./scripts/feeds install wget openssl-util
 
       - name: Add package
         run: |
@@ -104,10 +104,16 @@ jobs:
           echo "CONFIG_PACKAGE_${PKG_NAME}=m" > .config
           make defconfig
 
+      - name: Build po2lmo (lmo compiler)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          gcc -O2 -I tools/po2lmo/src -o /usr/local/bin/po2lmo \
+            tools/po2lmo/src/po2lmo.c tools/po2lmo/src/template_lmo.c
+          test -x /usr/local/bin/po2lmo
+
       - name: Build IPK
         run: |
           cd "$SDK_DIR"
-          make package/feeds/luci/luci-base/compile V=99
           make package/$PKG_NAME/compile -j$(nproc) V=s
           mapfile -t ipk_array < <(find "$SDK_DIR/bin/packages" -type f -path "$SDK_DIR/bin/packages/*/${PKG_NAME}_*.ipk")
           match_count=${#ipk_array[@]}
