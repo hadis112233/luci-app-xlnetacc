@@ -101,6 +101,8 @@ jobs:
             --exclude '*.tmp'
           )
           rsync -a --delete "${EXCLUDES[@]}" "$GITHUB_WORKSPACE/" "$pkg_dir/"
+          # 构建号随运行次数递增，便于区分每次构建产物
+          sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$GITHUB_RUN_NUMBER/" "$pkg_dir/Makefile"
           echo "CONFIG_PACKAGE_${PKG_NAME}=m" > .config
           make defconfig
 
