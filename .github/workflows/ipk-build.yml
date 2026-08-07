@@ -149,7 +149,7 @@ jobs:
         run: |
           rel_tag="${{ github.event.inputs.release_tag }}"
           rel_name="${{ github.event.inputs.release_name }}"
-          [ -z "$rel_tag" ] && rel_tag="ipk-build-${GITHUB_RUN_NUMBER}"
+          [ -z "$rel_tag" ] && rel_tag="auto-ipk-build-${GITHUB_RUN_NUMBER}"
           if [ -z "$rel_name" ]; then
             if [ "$GITHUB_EVENT_NAME" = "push" ]; then
               rel_name="Auto IPK build ${GITHUB_RUN_NUMBER}"
