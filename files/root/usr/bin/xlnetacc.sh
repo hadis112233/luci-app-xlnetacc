@@ -247,13 +247,18 @@ swjsq_recognize() {
 	EOF
 
 	local response
-	response=$($_http_cmd --header="Content-Type: application/json" --header="Authorization: Bearer $chatgpt_api_key" --post-file="$payload" "$endpoint")
+	local err_file="/tmp/xlnetacc_http_err"
+	response=$($_http_cmd --header="Content-Type: application/json" --header="Authorization: Bearer $chatgpt_api_key" --post-file="$payload" "$endpoint" 2>"$err_file")
 	local ret=$?
 	rm -f "$payload"
 	if [ $ret -ne 0 ]; then
-		_log "验证码识别请求失败(错误码=$ret)，请检查 base_url/model/api_key/网络"
+		local errmsg
+		errmsg=$(head -c 300 "$err_file" 2>/dev/null | tr '\n' ' ')
+		rm -f "$err_file"
+		_log "验证码识别请求失败(错误码=$ret): $errmsg"
 		return 1
 	fi
+	rm -f "$err_file"
 	[ -z "$response" ] && { _log "验证码识别响应为空"; return 1; }
 
 	local content
