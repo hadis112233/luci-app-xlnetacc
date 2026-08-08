@@ -1,7 +1,7 @@
 # luci-app-xlnetacc
 适用于 OpenWRT/LEDE 纯Shell实现的迅雷快鸟客户端
 
-依赖（安装包自动安装）：openssl-util、wget-ssl、ca-bundle、coreutils-od、tesseract（本地 OCR）、imagemagick（验证码图片去噪预处理）
+依赖（安装包自动安装）：openssl-util、ca-bundle、tesseract（本地 OCR）、imagemagick（验证码图片去噪预处理）。HTTP 客户端优先使用 `wget-ssl`，精简固件中会自动回退到系统 `wget`。
 
 
 更新到支持快鸟新协议 300
