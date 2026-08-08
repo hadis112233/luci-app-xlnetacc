@@ -247,6 +247,12 @@ xlnetacc_ai_recognize() {
 		*) endpoint="${endpoint%/}/chat/completions";;
 	esac
 	local model="${chatgpt_model:-agnes-2.5-flash}"
+	# Gemini 2.5 Flash 默认会使用思考 token；验证码只需短文本，关闭思考以避免输出被截断。
+	local reasoning_config=""
+	case "$endpoint" in
+		https://generativelanguage.googleapis.com/*) reasoning_config='
+  ,"reasoning_effort": "none"' ;;
+	esac
 	local img_base64=$(base64 "$image_file" | tr -d '\n')
 	[ -z "$img_base64" ] && return 1
 
@@ -269,8 +275,8 @@ xlnetacc_ai_recognize() {
 	      ]
 	    }
 	  ],
-	  "max_tokens": 30,
-	  "temperature": 0
+	  "max_tokens": 128,
+	  "temperature": 0${reasoning_config}
 	}
 	EOF
 
