@@ -196,7 +196,8 @@ swjsq_get_verify_code() {
 		rm -f "$image_file" "$key_file" "$header_file"
 		return 1
 	fi
-	local key=$(grep -i "^Set-Cookie:" "$header_file" | grep "VERIFY_KEY" | sed 's/.*VERIFY_KEY=\([^;[:space:]]*\).*/\1/' | tail -n 1)
+	# GNU Wget 的 -S 输出会在响应头前添加空格，不能强制要求 Set-Cookie 位于行首。
+	local key=$(grep -i "^[[:space:]]*Set-Cookie:" "$header_file" | grep "VERIFY_KEY" | sed 's/.*VERIFY_KEY=\([^;[:space:]]*\).*/\1/' | tail -n 1)
 
 	if [ -n "$key" ] && [ -s "$image_file" ]; then
 		echo -n "$key" > "$key_file"
@@ -204,7 +205,7 @@ swjsq_get_verify_code() {
 		# VERIFY_KEY 是短期验证码凭据，不能写入普通日志。
 		_log "已下载验证码至 /www/luci-static/resources/xlnetacc_verify.jpg"
 	else
-		_log "下载验证码失败"
+		[ -s "$image_file" ] && _log "下载验证码失败：响应中未找到 VERIFY_KEY" || _log "下载验证码失败：验证码图片为空"
 	fi
 	rm -f "$header_file"
 	[ -n "$key" ] && [ -s "$image_file" ]
