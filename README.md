@@ -30,20 +30,23 @@ AI 服务接收原始图像；本地 tesseract 会使用多种增强图，并且
 
 ## 方案一：NAS/电脑上的 ddddocr Docker 服务（推荐优先尝试）
 
-适合有 NAS 的用户。验证码图片只在你的局域网中传输，不消耗第三方 API 额度。此服务运行在 NAS，不能直接安装到 OpenWrt 路由器中。
+适合有 NAS 的用户。验证码图片只在你的局域网中传输，不消耗第三方 API 额度。Docker 服务由独立的 [hadis112233/ddddocr](https://github.com/hadis112233/ddddocr) 仓库维护，不能直接安装到 OpenWrt 路由器中。
 
-1. 将仓库中的 `docker/ddddocr` 文件夹复制到 NAS。
-2. 编辑其中的 `docker-compose.yml`，把 `OCR_TOKEN` 改成一段随机字符串。
-3. 在该文件夹执行：
+在 NAS 执行：
 
-   ```sh
-   docker compose up -d --build
-   ```
+```sh
+docker run -d \
+  --name xlnetacc-ddddocr \
+  --restart unless-stopped \
+  -p 8088:8088 \
+  -e OCR_TOKEN='请替换为随机字符串' \
+  -e MIN_CONFIDENCE='0.75' \
+  ghcr.io/hadis112233/ddddocr-xlnetacc:latest
+```
 
-4. 浏览器打开 `http://<NAS IP>:8088/healthz`，看到 `{"status":"ok"}` 即表示服务已启动。
-5. 在 LuCI 中填写：
+浏览器打开 `http://<NAS IP>:8088/healthz`，看到 `{"status":"ok"}` 即表示服务已启动。然后在 LuCI 中填写：
    - 局域网 OCR 地址：`http://<NAS IP>:8088`
-   - 局域网 OCR Token：与 `docker-compose.yml` 的 `OCR_TOKEN` 相同
+   - 局域网 OCR Token：与启动容器时设置的 `OCR_TOKEN` 相同
 
 服务会根据 ddddocr 的平均字符置信度判断结果是否可自动提交；低于 `MIN_CONFIDENCE`（默认 `0.75`）时，插件会自动尝试后续 AI/本地 OCR，最后再转手动输入。请勿把 8088 端口映射到公网。
 
