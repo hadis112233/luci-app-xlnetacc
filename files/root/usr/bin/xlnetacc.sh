@@ -110,7 +110,10 @@ get_bind_ip() {
 # 定义基本 HTTP 命令和参数
 gen_http_cmd() {
 	# 不跳过 TLS 证书校验，避免错误证书或中间人被当作可信服务。
-	_http_cmd="wget-ssl -nv -t 1 -T 5 -O -"
+	local wget_cmd
+	wget_cmd=$(command -v wget-ssl 2>/dev/null || command -v wget 2>/dev/null)
+	[ -n "$wget_cmd" ] || return 1
+	_http_cmd="$wget_cmd -nv -t 1 -T 5 -O -"
 	[ -n "$_bind_ip" ] && _http_cmd="$_http_cmd --bind-address=$_bind_ip"
 }
 
@@ -246,9 +249,11 @@ xlnetacc_ai_recognize() {
 	local img_base64=$(base64 "$image_file" | tr -d '\n')
 	[ -z "$img_base64" ] && return 1
 
-	# 按文件头判断 MIME（预处理后是 PNG，未装 ImageMagick 时是原图 JPEG）
+	# 用 Base64 前缀判断 MIME，避免依赖在精简固件中可能缺失的 od。
 	local mime="image/jpeg"
-	[ "$(head -c 4 "$image_file" | od -An -tx1 | tr -d ' \n')" = "89504e47" ] && mime="image/png"
+	case "$img_base64" in
+		iVBORw0K*) mime="image/png" ;;
+	esac
 
 	local payload="/tmp/xlnetacc_chat_payload.json"
 	cat > "$payload" <<-EOF
@@ -927,7 +932,7 @@ xlnetacc_init() {
 	_log "迅雷快鸟正在启动..."
 
 	# 检查外部调用工具
-	command -v wget-ssl >/dev/null || { _log "GNU Wget 未安装"; return 3; }
+	command -v wget-ssl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { _log "Wget 未安装"; return 3; }
 	local opensslchk=$(echo -n 'openssl' | openssl dgst -sha1 | awk '{print $2}')
 	[ "$opensslchk" != 'c898fa1e7226427010e329971e82c669f8d8abb4' ] && { _log "openssl-util 未安装或计算错误"; return 3; }
 
