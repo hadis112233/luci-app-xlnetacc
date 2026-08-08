@@ -289,19 +289,24 @@ xlnetacc_ai_recognize() {
 	rm -f "$err_file"
 	[ -z "$response" ] && { _log "验证码识别响应为空"; return 1; }
 
-	local content
+	local content finish_reason refusal
 	json_cleanup; json_load "$response" >/dev/null 2>&1
 	if ! json_select "choices" >/dev/null 2>&1; then
 		_log "验证码识别响应格式异常: $(echo "$response" | head -c 160)"
 		return 1
 	fi
 	json_select 1 >/dev/null 2>&1 || { _log "验证码识别响应缺少结果"; return 1; }
+	json_get_var finish_reason "finish_reason"
 	json_select "message" >/dev/null 2>&1 || { _log "验证码识别响应缺少 message"; return 1; }
 	json_get_var content "content"
+	json_get_var refusal "refusal"
 	json_select ".." >/dev/null 2>&1
 	json_select ".." >/dev/null 2>&1
 	json_select ".." >/dev/null 2>&1
-	[ -z "$content" ] && { _log "AI 未识别出验证码内容"; return 1; }
+	# 仅记录响应状态，不输出完整模型回复、验证码图片或 API Key。
+	local refusal_flag="否"
+	[ -n "$refusal" ] && refusal_flag="是"
+	[ -z "$content" ] && { _log "AI 未识别出验证码内容（结束原因: ${finish_reason:-未知}；拒答: ${refusal_flag}）"; return 1; }
 	content=$(echo "$content" | tr -d '\r' | head -n 1)
 	content=$(xlnetacc_normalize_code "$content")
 	# 快鸟验证码固定 4 位，长度不对视为识别失败（自动重新获取验证码重试）
