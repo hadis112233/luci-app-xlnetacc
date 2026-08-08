@@ -126,8 +126,8 @@ msgstr "无日志数据。"
 
 msgid "Error get log data."
 msgstr "获取日志数据失败。"
-msgid "Recognition order: AI service (when API Key is set) -> local tesseract OCR -> manual input. The captcha image is automatically denoised before recognition."
-msgstr "识别顺序：AI 服务（配置了 API Key 时）-> 本地 tesseract OCR -> 手动输入。识别前会自动对验证码图片去噪。"
+msgid "Recognition order: AI service (when API Key is set, receives original image) -> local tesseract OCR (multiple enhanced images; submits only when results agree) -> manual input."
+msgstr "识别顺序：AI 服务（配置了 API Key 时，使用原图）-> 本地 tesseract OCR（多种增强图；结果一致才提交）-> 手动输入。"
 
 msgid "AI service -> Local OCR -> manual input"
 msgstr "AI 服务 -> 本地 OCR -> 手动输入"

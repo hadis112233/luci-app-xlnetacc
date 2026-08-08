@@ -48,7 +48,7 @@ o = s:option(Value, "account", translate("XLNetAcc account"))
 o = s:option(Value, "password", translate("XLNetAcc password"))
 o.password = true
 
-o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("Recognition order: AI service (when API Key is set) -> local tesseract OCR -> manual input. The captcha image is automatically denoised before recognition."))
+o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("Recognition order: AI service (when API Key is set, receives original image) -> local tesseract OCR (multiple enhanced images; submits only when results agree) -> manual input."))
 o.default = translate("AI service -> Local OCR -> manual input")
 o = s:option(Value, "base_url", translate("Captcha AI Base URL"), translate("OpenAI-compatible endpoint base URL. Free options: Gemini / OpenRouter / Qwen, see README for details."))
 o.placeholder = "https://apihub.agnes-ai.com/v1"
