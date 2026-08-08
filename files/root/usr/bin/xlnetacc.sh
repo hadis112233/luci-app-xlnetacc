@@ -260,7 +260,8 @@ xlnetacc_lan_ocr_recognize() {
 	local err_file="/tmp/xlnetacc_lan_ocr_err"
 	local response ret lan_http_cmd
 	# 局域网容器首次加载模型也可能较慢，仅此请求使用 10 秒超时。
-	lan_http_cmd=$(echo "$_http_cmd" | sed 's/-T 5/-T 10/')
+	# 不能继承外网接口的 --bind-address，否则路由器无法回到 LAN 中的 NAS。
+	lan_http_cmd=$(echo "$_http_cmd" | sed -e 's/-T 5/-T 10/' -e 's/ --bind-address=[^ ]*//')
 	if [ -n "$lan_ocr_token" ]; then
 		response=$($lan_http_cmd --header="Content-Type: image/jpeg" --header="Authorization: Bearer $lan_ocr_token" --post-file="$image_file" "$endpoint" 2>"$err_file")
 	else
@@ -268,7 +269,7 @@ xlnetacc_lan_ocr_recognize() {
 	fi
 	ret=$?
 	if [ "$ret" -ne 0 ]; then
-		_log "局域网 OCR 请求失败（错误码=$ret）"
+		_log "局域网 OCR 请求失败（错误码=$ret；请检查 NAS 地址和路由器到 NAS 的连通性）"
 		rm -f "$err_file"
 		return 1
 	fi
