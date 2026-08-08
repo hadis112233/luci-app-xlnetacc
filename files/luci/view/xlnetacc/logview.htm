@@ -31,14 +31,19 @@
 <script type="text/javascript" src="<%=resource%>/cbi.js"></script>
 <script type="text/javascript">//<![CDATA[
 	var log_id = document.getElementById('log_text');
+	function escape_html(value) {
+		return String(value).replace(/[&<>"']/g, function(c) {
+			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+		});
+	}
 	XHR.poll(5, '<%=luci.dispatcher.build_url("admin", "services", "xlnetacc", "logdata")%>', null, function(x, data) {
 		if ( log_id && data ) {
 			log_id.innerHTML = String.format(
 				'<pre>%s%s%s%s</pre>',
 				'<span class="description"><strong><%:syslog:%></strong></span><br/>',
-				data.syslog || '<%:No log data.%>',
+				escape_html(data.syslog || '<%:No log data.%>'),
 				'<br/><br/><span class="description"><strong><%:log file:%></strong></span><br/>',
-				data.client || '<%:No log data.%>'
+				escape_html(data.client || '<%:No log data.%>')
 			);
 		} else if ( log_id ) {
 			log_id.innerHTML = '<strong><%:Error get log data.%></strong>';

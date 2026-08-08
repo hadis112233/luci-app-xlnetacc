@@ -109,7 +109,8 @@ get_bind_ip() {
 
 # 定义基本 HTTP 命令和参数
 gen_http_cmd() {
-	_http_cmd="wget-ssl -nv -t 1 -T 5 -O - --no-check-certificate"
+	# 不跳过 TLS 证书校验，避免错误证书或中间人被当作可信服务。
+	_http_cmd="wget-ssl -nv -t 1 -T 5 -O -"
 	[ -n "$_bind_ip" ] && _http_cmd="$_http_cmd --bind-address=$_bind_ip"
 }
 
@@ -185,17 +186,25 @@ swjsq_get_verify_code() {
 	local key_file="/tmp/xlnetacc_verify_key"
 	local header_file="/tmp/xlnetacc_headers"
 
-	$_http_cmd -S -O "$image_file" "$url" >/dev/null 2> "$header_file"
-	local key=$(grep "Set-Cookie:" "$header_file" | grep "VERIFY_KEY" | sed 's/.*VERIFY_KEY=\([^;]*\).*/\1/')
+	# 先清理旧文件；下载失败时绝不能复用上一次验证码或 Key。
+	rm -f "$image_file" "$key_file" "$header_file"
+	if ! $_http_cmd -S -O "$image_file" "$url" >/dev/null 2> "$header_file"; then
+		_log "下载验证码失败：请求未完成"
+		rm -f "$image_file" "$key_file" "$header_file"
+		return 1
+	fi
+	local key=$(grep -i "^Set-Cookie:" "$header_file" | grep "VERIFY_KEY" | sed 's/.*VERIFY_KEY=\([^;[:space:]]*\).*/\1/' | tail -n 1)
 
-	if [ -n "$key" ]; then
+	if [ -n "$key" ] && [ -s "$image_file" ]; then
 		echo -n "$key" > "$key_file"
 		cp "$image_file" "/www/luci-static/resources/xlnetacc_verify.jpg" 2>/dev/null
-		_log "已下载验证码至 /www/luci-static/resources/xlnetacc_verify.jpg，KEY: $key"
+		# VERIFY_KEY 是短期验证码凭据，不能写入普通日志。
+		_log "已下载验证码至 /www/luci-static/resources/xlnetacc_verify.jpg"
 	else
 		_log "下载验证码失败"
 	fi
 	rm -f "$header_file"
+	[ -n "$key" ] && [ -s "$image_file" ]
 }
 
 # 验证码图片预处理：放大3倍 + 灰度 + 阈值去噪（保留亮色字符，去除暗色干扰线），输出黑白图
@@ -352,22 +361,27 @@ swjsq_auto_verify() {
 	if ! command -v tesseract >/dev/null 2>&1 && [ -z "$chatgpt_api_key" ]; then
 		return 1
 	fi
-	while : ; do
+	while [ "$captcha_auto_retry" -lt "$max_retry" ]; do
 		local code=$(swjsq_recognize "$image_file")
 		captcha_auto_retry=$(( $captcha_auto_retry + 1 ))
 		if [ -n "$code" ]; then
 			echo -n "$code" > "$code_file"
 			_log "自动识别验证码: $code (第${captcha_auto_retry}次尝试)"
-			swjsq_login
-			return $?
+			# 此次登录只返回结果，不能再次进入验证码流程，否则会递归重试且绕过上限。
+			swjsq_login --captcha-retry
+			[ $? -eq 0 ] && return 0
+			[ "${lasterr:-}" != 6 ] && return 1
+			[ "$captcha_auto_retry" -ge "$max_retry" ] && break
+			_log "自动识别的验证码无效 (第${captcha_auto_retry}次)，重新获取验证码"
+		else
+			[ "$captcha_auto_retry" -ge "$max_retry" ] && break
+			_log "自动识别验证码失败 (第${captcha_auto_retry}次)，重新获取验证码"
 		fi
-		if [ $captcha_auto_retry -ge $max_retry ]; then
-			_log "自动识别验证码失败次数达到上限，切换为手动输入模式"
-			return 1
-		fi
-		_log "自动识别验证码失败 (第${captcha_auto_retry}次)，重新获取验证码"
-		swjsq_get_verify_code "${verify_type:-MEA}"
+		rm -f "$code_file"
+		swjsq_get_verify_code "${verify_type:-MEA}" || return 1
 	done
+	_log "自动识别验证码失败次数达到上限，切换为手动输入模式"
+	return 1
 }
 
 # 帐号登录
@@ -430,7 +444,10 @@ swjsq_login() {
 			local verify_type
 			json_get_var verify_type "verifyType"
 			local outmsg="帐号登录失败。需要输入图形验证码"; _log "$outmsg" $(( 1 | 8 | 32 ))
-			swjsq_get_verify_code "${verify_type:-MEA}"
+			# 自动重试时只把错误结果交回调用者，由调用者统一控制次数。
+			[ "$1" = "--captcha-retry" ] && return 1
+
+			swjsq_get_verify_code "${verify_type:-MEA}" || return 1
 			
 			local wait_time=180
 			local code_file="/tmp/xlnetacc_verify_code"
@@ -707,10 +724,21 @@ isp_upgrade() {
 
 	case ${lasterr:=-1} in
 		0)
-			local bandwidth
-			json_select "bandwidth" >/dev/null 2>&1
-			json_get_var bandwidth "downstream"
-			bandwidth=$(( ${bandwidth:-0} / 1024 ))
+			local bandwidth stream
+			[ "$1" -eq 1 ] && stream="downstream" || stream="upstream"
+			if ! json_select "bandwidth" >/dev/null 2>&1; then
+				lasterr=-1
+				_log "${link_cn}提速响应缺少带宽数据，无法确认提速结果" $(( 1 | $1 * 8 | 32 ))
+				return 1
+			fi
+			json_get_var bandwidth "$stream"
+			json_select ".." >/dev/null 2>&1
+			if [ -z "$bandwidth" ] || [ -n "${bandwidth//[0-9]/}" ]; then
+				lasterr=-1
+				_log "${link_cn}提速响应中的带宽数据无效，无法确认提速结果" $(( 1 | $1 * 8 | 32 ))
+				return 1
+			fi
+			bandwidth=$(( bandwidth / 1024 ))
 			local outmsg="${link_cn}提速成功，带宽已提升到 ${bandwidth}M"; _log "$outmsg" $(( 1 | $1 * 8 ))
 			[ $1 -eq 1 ] && down_acc=2 || up_acc=2
 			;;
