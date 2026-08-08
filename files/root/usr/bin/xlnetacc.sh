@@ -247,21 +247,34 @@ xlnetacc_lan_ocr_recognize() {
 	fi
 	rm -f "$err_file"
 
-	local code accepted confidence default_code default_confidence beta_code beta_confidence
+	local code accepted confidence source default_code default_candidate default_confidence beta_code beta_candidate beta_confidence
 	json_cleanup; json_load "$response" >/dev/null 2>&1 || { _log "局域网 OCR 响应格式异常"; return 1; }
 	json_get_var code "code"
 	json_get_var accepted "accepted"
 	json_get_var confidence "confidence"
+	json_get_var source "source"
 	json_get_var default_code "default_code"
+	json_get_var default_candidate "default_candidate"
 	json_get_var default_confidence "default_confidence"
 	json_get_var beta_code "beta_code"
+	json_get_var beta_candidate "beta_candidate"
 	json_get_var beta_confidence "beta_confidence"
 	code=$(xlnetacc_normalize_code "$code")
 	if [ "${#code}" -eq 4 ] && { [ "$accepted" = "1" ] || [ "$accepted" = "true" ]; }; then
 		echo -n "$code"
 		return 0
 	fi
-	_log "局域网 OCR 未达提交条件（默认: ${default_code:-无}/${default_confidence:-0}；Beta: ${beta_code:-无}/${beta_confidence:-0}；一致结果置信度: ${confidence:-0}），改用后续识别方式"
+	case "$source" in
+		beta)
+			_log "局域网 OCR（Beta 单模型）未得到有效 4 位验证码（候选: ${beta_candidate:-无}；置信度: ${beta_confidence:-0}），改用后续识别方式"
+			;;
+		default)
+			_log "局域网 OCR（默认单模型）未得到有效 4 位验证码（候选: ${default_candidate:-无}；置信度: ${default_confidence:-0}），改用后续识别方式"
+			;;
+		*)
+			_log "局域网 OCR 未达提交条件（默认: ${default_candidate:-${default_code:-无}}/${default_confidence:-0}；Beta: ${beta_candidate:-${beta_code:-无}}/${beta_confidence:-0}；结果置信度: ${confidence:-0}），改用后续识别方式"
+			;;
+	esac
 	return 1
 }
 
