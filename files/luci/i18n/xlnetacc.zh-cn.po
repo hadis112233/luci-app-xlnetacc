@@ -126,23 +126,11 @@ msgstr "无日志数据。"
 
 msgid "Error get log data."
 msgstr "获取日志数据失败。"
-msgid "Recognition order: LAN ddddocr (when configured) -> AI service (when API Key is set, receives original image) -> manual input."
-msgstr "识别顺序：局域网 ddddocr（配置后）-> AI 服务（配置了 API Key 时，使用原图）-> 手动输入。"
+msgid "Recognition order: AI service (when API Key is set, receives original image) -> manual input."
+msgstr "识别顺序：AI 服务（配置了 API Key 时，使用原图）-> 手动输入。"
 
-msgid "LAN OCR -> AI service -> Local OCR -> manual input"
-msgstr "局域网 OCR -> AI 服务 -> 本地 OCR -> 手动输入"
-
-msgid "LAN OCR URL"
-msgstr "局域网 OCR 地址"
-
-msgid "Address of your NAS/PC ddddocr service. Example: http://192.168.1.10:8088. The plugin appends /ocr automatically."
-msgstr "NAS 或电脑上 ddddocr 服务的地址。例如：http://192.168.1.10:8088。插件会自动追加 /ocr。"
-
-msgid "LAN OCR Token"
-msgstr "局域网 OCR Token"
-
-msgid "Optional shared token. Must match OCR_TOKEN in the Docker Compose file."
-msgstr "可选的共享 Token，必须与 Docker Compose 文件中的 OCR_TOKEN 一致。"
+msgid "AI service -> manual input"
+msgstr "AI 服务 -> 手动输入"
 
 msgid "OpenAI-compatible endpoint base URL. Free options: Gemini / OpenRouter / Qwen, see README for details."
 msgstr "OpenAI 兼容接口的基础地址。免费可选：Gemini / OpenRouter / 通义千问，详见 README。"
