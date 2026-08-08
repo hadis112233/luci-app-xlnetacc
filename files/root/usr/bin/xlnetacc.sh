@@ -275,16 +275,21 @@ xlnetacc_lan_ocr_recognize() {
 	fi
 	rm -f "$err_file"
 
-	local code accepted
+	local code accepted confidence default_code default_confidence beta_code beta_confidence
 	json_cleanup; json_load "$response" >/dev/null 2>&1 || { _log "局域网 OCR 响应格式异常"; return 1; }
 	json_get_var code "code"
 	json_get_var accepted "accepted"
+	json_get_var confidence "confidence"
+	json_get_var default_code "default_code"
+	json_get_var default_confidence "default_confidence"
+	json_get_var beta_code "beta_code"
+	json_get_var beta_confidence "beta_confidence"
 	code=$(xlnetacc_normalize_code "$code")
 	if [ "${#code}" -eq 4 ] && { [ "$accepted" = "1" ] || [ "$accepted" = "true" ]; }; then
 		echo -n "$code"
 		return 0
 	fi
-	_log "局域网 OCR 置信度不足或结果无效，改用后续识别方式"
+	_log "局域网 OCR 未达提交条件（默认: ${default_code:-无}/${default_confidence:-0}；Beta: ${beta_code:-无}/${beta_confidence:-0}；一致结果置信度: ${confidence:-0}），改用后续识别方式"
 	return 1
 }
 
