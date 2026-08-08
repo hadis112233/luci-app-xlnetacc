@@ -352,7 +352,7 @@ swjsq_auto_verify() {
 	if ! command -v tesseract >/dev/null 2>&1 && [ -z "$chatgpt_api_key" ]; then
 		return 1
 	fi
-	while [ $captcha_auto_retry -lt $max_retry ]; do
+	while : ; do
 		local code=$(swjsq_recognize "$image_file")
 		captcha_auto_retry=$(( $captcha_auto_retry + 1 ))
 		if [ -n "$code" ]; then
@@ -361,11 +361,13 @@ swjsq_auto_verify() {
 			swjsq_login
 			return $?
 		fi
+		if [ $captcha_auto_retry -ge $max_retry ]; then
+			_log "自动识别验证码失败次数达到上限，切换为手动输入模式"
+			return 1
+		fi
 		_log "自动识别验证码失败 (第${captcha_auto_retry}次)，重新获取验证码"
 		swjsq_get_verify_code "${verify_type:-MEA}"
 	done
-	_log "自动识别验证码失败次数达到上限，切换为手动输入模式"
-	return 1
 }
 
 # 帐号登录
