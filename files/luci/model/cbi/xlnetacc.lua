@@ -48,13 +48,8 @@ o = s:option(Value, "account", translate("XLNetAcc account"))
 o = s:option(Value, "password", translate("XLNetAcc password"))
 o.password = true
 
-o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("Recognition order: LAN ddddocr (when configured) -> AI service (when API Key is set, receives original image) -> manual input."))
-o.default = translate("LAN OCR -> AI service -> manual input")
-o = s:option(Value, "lan_ocr_url", translate("LAN OCR URL"), translate("Address of your NAS/PC ddddocr service. Example: http://192.168.1.10:8088. The plugin appends /ocr automatically."))
-o.placeholder = "http://192.168.1.10:8088"
-
-o = s:option(Value, "lan_ocr_token", translate("LAN OCR Token"), translate("Optional shared token. Must match OCR_TOKEN in the Docker Compose file."))
-o.password = true
+o = s:option(DummyValue, "ocr_tip", translate("Captcha recognition"), translate("Recognition order: AI service (when API Key is set, receives original image) -> manual input."))
+o.default = translate("AI service -> manual input")
 
 o = s:option(Value, "base_url", translate("Captcha AI Base URL"), translate("OpenAI-compatible endpoint base URL. Free options: Gemini / OpenRouter / Qwen, see README for details."))
 o.placeholder = "https://apihub.agnes-ai.com/v1"

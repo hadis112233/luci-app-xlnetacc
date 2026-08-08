@@ -31,8 +31,6 @@ lasterr=
 chatgpt_base_url=
 chatgpt_api_key=
 chatgpt_model=
-lan_ocr_url=
-lan_ocr_token=
 captcha_auto_retry=0
 sequence_xl=1000000
 sequence_down=$(( $(date +%s) / 6 ))
@@ -218,66 +216,6 @@ xlnetacc_normalize_code() {
 	echo "$1" | tr -dc 'A-Za-z0-9' | tr 'a-z' 'A-Z'
 }
 
-# 调用局域网部署的 ddddocr 服务。服务只在结果长度正确且置信度达标时
-# 返回 accepted=true；否则继续尝试后续识别方式，不自动提交。
-xlnetacc_lan_ocr_recognize() {
-	local image_file=$1
-	[ -n "$lan_ocr_url" ] && [ -s "$image_file" ] || return 2
-
-	local endpoint="${lan_ocr_url%/}"
-	case "$endpoint" in
-		*/ocr) ;;
-		*) endpoint="$endpoint/ocr" ;;
-	esac
-	local err_file="/tmp/xlnetacc_lan_ocr_err"
-	local response ret lan_http_cmd
-	# 局域网容器首次加载模型也可能较慢，仅此请求使用 10 秒超时。
-	# 不能继承外网接口的 --bind-address，否则路由器无法回到 LAN 中的 NAS。
-	lan_http_cmd=$(echo "$_http_cmd" | sed -e 's/-T 5/-T 10/' -e 's/ --bind-address=[^ ]*//')
-	if [ -n "$lan_ocr_token" ]; then
-		response=$($lan_http_cmd --header="Content-Type: image/jpeg" --header="Authorization: Bearer $lan_ocr_token" --post-file="$image_file" "$endpoint" 2>"$err_file")
-	else
-		response=$($lan_http_cmd --header="Content-Type: image/jpeg" --post-file="$image_file" "$endpoint" 2>"$err_file")
-	fi
-	ret=$?
-	if [ "$ret" -ne 0 ]; then
-		_log "局域网 OCR 请求失败（错误码=$ret；请检查 NAS 地址和路由器到 NAS 的连通性）"
-		rm -f "$err_file"
-		return 1
-	fi
-	rm -f "$err_file"
-
-	local code accepted confidence source default_code default_candidate default_confidence beta_code beta_candidate beta_confidence
-	json_cleanup; json_load "$response" >/dev/null 2>&1 || { _log "局域网 OCR 响应格式异常"; return 1; }
-	json_get_var code "code"
-	json_get_var accepted "accepted"
-	json_get_var confidence "confidence"
-	json_get_var source "source"
-	json_get_var default_code "default_code"
-	json_get_var default_candidate "default_candidate"
-	json_get_var default_confidence "default_confidence"
-	json_get_var beta_code "beta_code"
-	json_get_var beta_candidate "beta_candidate"
-	json_get_var beta_confidence "beta_confidence"
-	code=$(xlnetacc_normalize_code "$code")
-	if [ "${#code}" -eq 4 ] && { [ "$accepted" = "1" ] || [ "$accepted" = "true" ]; }; then
-		echo -n "$code"
-		return 0
-	fi
-	case "$source" in
-		beta)
-			_log "局域网 OCR（Beta 单模型）未得到有效 4 位验证码（候选: ${beta_candidate:-无}；置信度: ${beta_confidence:-0}），改用后续识别方式"
-			;;
-		default)
-			_log "局域网 OCR（默认单模型）未得到有效 4 位验证码（候选: ${default_candidate:-无}；置信度: ${default_confidence:-0}），改用后续识别方式"
-			;;
-		*)
-			_log "局域网 OCR 未达提交条件（默认: ${default_candidate:-${default_code:-无}}/${default_confidence:-0}；Beta: ${beta_candidate:-${beta_code:-无}}/${beta_confidence:-0}；结果置信度: ${confidence:-0}），改用后续识别方式"
-			;;
-	esac
-	return 1
-}
-
 # 调用 AI 视觉模型识别验证码（OpenAI 兼容接口：{base_url}/chat/completions）
 xlnetacc_ai_recognize() {
 	local image_file=$1
@@ -377,23 +315,12 @@ xlnetacc_ai_recognize() {
 	return 0
 }
 
-# 识别验证码：优先局域网 ddddocr，其次 AI（使用原始图），失败后手动输入。
+# 识别验证码：使用 AI（原始图），失败后手动输入。
 swjsq_recognize() {
 	local image_file=$1
 	[ -s "$image_file" ] || return 1
 
-	# 1) 局域网 ddddocr：验证码图片不离开本地网络。
-	if [ -n "$lan_ocr_url" ]; then
-		local lan_ocr_code
-		lan_ocr_code=$(xlnetacc_lan_ocr_recognize "$image_file")
-		if [ -n "$lan_ocr_code" ]; then
-			_log "局域网 OCR 识别验证码: $lan_ocr_code"
-			echo -n "$lan_ocr_code"
-			return 0
-		fi
-	fi
-
-	# 2) AI 识别：专用 OCR 模型需要原始颜色、边缘和背景信息。
+	# AI 识别：专用 OCR 模型需要原始颜色、边缘和背景信息。
 	if [ -n "$chatgpt_api_key" ]; then
 		local ai_code
 		ai_code=$(xlnetacc_ai_recognize "$image_file")
@@ -413,7 +340,7 @@ swjsq_auto_verify() {
 	local image_file="/tmp/xlnetacc_verify.jpg"
 	local max_retry=5
 
-	if [ -z "$chatgpt_api_key" ] && [ -z "$lan_ocr_url" ]; then
+	if [ -z "$chatgpt_api_key" ]; then
 		return 1
 	fi
 	while [ "$captcha_auto_retry" -lt "$max_retry" ]; do
@@ -509,8 +436,8 @@ swjsq_login() {
 			local wait_time=180
 			local code_file="/tmp/xlnetacc_verify_code"
 			rm -f "$code_file"
-			if [ -z "$chatgpt_api_key" ] && [ -z "$lan_ocr_url" ]; then
-				_log "未配置 AI API Key 或局域网 OCR 地址，使用手动输入模式"
+			if [ -z "$chatgpt_api_key" ]; then
+				_log "未配置 AI API Key，使用手动输入模式"
 			else
 				swjsq_auto_verify "${verify_type:-MEA}"
 				[ $? -eq 0 ] && return 0
@@ -970,8 +897,6 @@ xlnetacc_init() {
 	chatgpt_base_url=$(uci_get_by_name "general" "base_url" "https://apihub.agnes-ai.com/v1")
 	chatgpt_model=$(uci_get_by_name "general" "model" "agnes-2.5-flash")
 	chatgpt_api_key=$(uci_get_by_name "general" "api_key")
-	lan_ocr_url=$(uci_get_by_name "general" "lan_ocr_url")
-	lan_ocr_token=$(uci_get_by_name "general" "lan_ocr_token")
 	[ -z "$chatgpt_base_url" ] && chatgpt_base_url="https://apihub.agnes-ai.com/v1"
 	[ -z "$chatgpt_model" ] && chatgpt_model="agnes-2.5-flash"
 	local enabled=$(uci_get_by_bool "general" "enabled" 0)
