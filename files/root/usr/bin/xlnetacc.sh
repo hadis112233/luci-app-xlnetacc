@@ -211,10 +211,10 @@ swjsq_get_verify_code() {
 	[ -n "$key" ] && [ -s "$image_file" ]
 }
 
-# 验证码图片预处理：放大3倍 + 灰度 + 阈值去噪（保留亮色字符，去除暗色干扰线），输出黑白图
-# 依赖 ImageMagick（convert/magick），缺失时退回原图
-xlnetacc_clean_image() {
-	local src=$1 dst=$2
+# 为本地 OCR 生成多种增强图。快鸟验证码的字符与干扰线颜色会变化，
+# 不能只用一个固定阈值；AI 则应始终接收原图，避免二值化丢失颜色细节。
+xlnetacc_prepare_ocr_images() {
+	local src=$1
 	[ -s "$src" ] || return 1
 	local conv
 	if command -v convert >/dev/null 2>&1; then
@@ -223,16 +223,67 @@ xlnetacc_clean_image() {
 		conv=magick
 	fi
 	if [ -n "$conv" ]; then
-		$conv "$src" -colorspace Gray -filter Lanczos -resize 300% -threshold 58% -negate "$dst" 2>/dev/null
-		[ -s "$dst" ] && return 0
+		local gray_file="/tmp/xlnetacc_verify_ocr_gray.png"
+		local dark_file="/tmp/xlnetacc_verify_ocr_dark.png"
+		local light_file="/tmp/xlnetacc_verify_ocr_light.png"
+		# 灰度保留全部笔画；dark/light 两张图分别保留深色和浅色字符。
+		$conv "$src" -colorspace Gray -auto-level -filter Lanczos -resize 400% -bordercolor White -border 12x12 "$gray_file" 2>/dev/null
+		$conv "$src" -colorspace Gray -auto-level -filter Lanczos -resize 400% -threshold 55% -bordercolor White -border 12x12 "$dark_file" 2>/dev/null
+		$conv "$src" -colorspace Gray -filter Lanczos -resize 400% -threshold 58% -negate -bordercolor White -border 12x12 "$light_file" 2>/dev/null
+		[ -s "$gray_file" ] && echo "$gray_file"
+		[ -s "$dark_file" ] && echo "$dark_file"
+		[ -s "$light_file" ] && echo "$light_file"
+		[ -s "$gray_file" ] || [ -s "$dark_file" ] || [ -s "$light_file" ]
+		return
 	fi
-	cp "$src" "$dst" 2>/dev/null
-	[ -s "$dst" ]
+	echo "$src"
 }
 
 # 规范化验证码：只保留字母数字并统一转大写（快鸟验证码为4位字母数字混合，不区分大小写）
 xlnetacc_normalize_code() {
 	echo "$1" | tr -dc 'A-Za-z0-9' | tr 'a-z' 'A-Z'
+}
+
+# 从多张增强图和多种版面模式中取得一致结果。
+# 仅有一次识别出的 4 位字符串并不可信，因此至少两次结果一致才自动提交。
+xlnetacc_local_ocr() {
+	local image_file=$1 ocr_images ocr_image psm ocr_code
+	local candidates="" seen="" candidate count best_code="" best_count=0
+	ocr_images=$(xlnetacc_prepare_ocr_images "$image_file") || return 1
+	[ -n "$ocr_images" ] || return 1
+
+	for ocr_image in $ocr_images; do
+		for psm in 7 8 13; do
+			ocr_code=$(tesseract "$ocr_image" stdout --psm "$psm" \
+				-c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ \
+				-c load_system_dawg=0 -c load_freq_dawg=0 2>/dev/null)
+			ocr_code=$(xlnetacc_normalize_code "$ocr_code")
+			[ "${#ocr_code}" -eq 4 ] && candidates="$candidates $ocr_code"
+		done
+	done
+
+	for candidate in $candidates; do
+		case " $seen " in
+			*" $candidate "*) continue ;;
+		esac
+		seen="$seen $candidate"
+		count=0
+		for ocr_code in $candidates; do
+			[ "$ocr_code" = "$candidate" ] && count=$((count + 1))
+		done
+		if [ "$count" -gt "$best_count" ]; then
+			best_code=$candidate
+			best_count=$count
+		fi
+	done
+
+	if [ "$best_count" -ge 2 ]; then
+		_log "本地 OCR 多路识别一致（${best_count}次）: $best_code"
+		echo -n "$best_code"
+		return 0
+	fi
+	[ -n "$candidates" ] && _log "本地 OCR 结果不一致，改为手动输入以避免错误重试" || _log "本地 OCR 识别失败"
+	return 1
 }
 
 # 调用 AI 视觉模型识别验证码（OpenAI 兼容接口：{base_url}/chat/completions）
@@ -330,19 +381,15 @@ xlnetacc_ai_recognize() {
 	return 0
 }
 
-# 识别验证码：优先 AI（配置了 API Key 时，视觉模型比本地 OCR 更准），其次本地 tesseract OCR
+# 识别验证码：优先 AI（使用原始图），其次本地 tesseract OCR 多路校验
 swjsq_recognize() {
 	local image_file=$1
 	[ -s "$image_file" ] || return 1
 
-	# 先做图像预处理（去噪），提升 tesseract 和 AI 的识别率
-	local clean_file="/tmp/xlnetacc_verify_clean.png"
-	xlnetacc_clean_image "$image_file" "$clean_file" || return 1
-
-	# 1) AI 识别
+	# 1) AI 识别：专用 OCR 模型需要原始颜色、边缘和背景信息。
 	if [ -n "$chatgpt_api_key" ]; then
 		local ai_code
-		ai_code=$(xlnetacc_ai_recognize "$clean_file")
+		ai_code=$(xlnetacc_ai_recognize "$image_file")
 		if [ -n "$ai_code" ]; then
 			_log "AI 识别验证码: $ai_code"
 			echo -n "$ai_code"
@@ -361,15 +408,11 @@ swjsq_recognize() {
 			done
 		fi
 		local ocr_code
-		ocr_code=$(tesseract "$clean_file" stdout --psm 7 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)
-		[ -z "$ocr_code" ] && ocr_code=$(tesseract "$clean_file" stdout --psm 8 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 2>/dev/null)
-		ocr_code=$(xlnetacc_normalize_code "$ocr_code")
-		if [ "${#ocr_code}" -eq 4 ]; then
-			_log "本地 OCR 识别验证码: $ocr_code"
+		ocr_code=$(xlnetacc_local_ocr "$image_file")
+		if [ -n "$ocr_code" ]; then
 			echo -n "$ocr_code"
 			return 0
 		fi
-		_log "本地 OCR 识别失败"
 	fi
 
 	return 2
