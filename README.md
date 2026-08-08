@@ -18,9 +18,9 @@
 
 快鸟登录遇到 "为了您的帐号安全，请输入图形验证码[6]" 时，插件会按以下顺序自动识别：
 
-**AI 服务（配置了 API Key）-> 本地 tesseract OCR -> 手动输入**
+**局域网 ddddocr（配置后）-> AI 服务（配置了 API Key）-> 本地 tesseract OCR -> 手动输入**
 
-识别前会自动对验证码图片做去噪预处理（放大 + 灰度 + 阈值去除干扰线，依赖 ImageMagick，安装包已自动带上），能明显提升识别率。
+AI 服务接收原始图像；本地 tesseract 会使用多种增强图，并且至少两次结果一致才自动提交，避免单次误识别造成错误重试。
 
 自动识别最多提交 5 次；无论是“未识别出字符”还是“识别结果被服务器拒绝”都会计入上限，之后自动切换为手动输入，避免连续错误提交。
 
@@ -28,7 +28,26 @@
 
 > 登录和 AI 请求会校验证书。迅雷现有的部分历史提速接口仅提供 HTTP，这是服务端协议限制；请避免在不可信网络中使用，直到迅雷提供 HTTPS 接口。
 
-## 方案一：OpenRouter 免费视觉模型（推荐）
+## 方案一：NAS/电脑上的 ddddocr Docker 服务（推荐优先尝试）
+
+适合有 NAS 的用户。验证码图片只在你的局域网中传输，不消耗第三方 API 额度。此服务运行在 NAS，不能直接安装到 OpenWrt 路由器中。
+
+1. 将仓库中的 `docker/ddddocr` 文件夹复制到 NAS。
+2. 编辑其中的 `docker-compose.yml`，把 `OCR_TOKEN` 改成一段随机字符串。
+3. 在该文件夹执行：
+
+   ```sh
+   docker compose up -d --build
+   ```
+
+4. 浏览器打开 `http://<NAS IP>:8088/healthz`，看到 `{"status":"ok"}` 即表示服务已启动。
+5. 在 LuCI 中填写：
+   - 局域网 OCR 地址：`http://<NAS IP>:8088`
+   - 局域网 OCR Token：与 `docker-compose.yml` 的 `OCR_TOKEN` 相同
+
+服务会根据 ddddocr 的平均字符置信度判断结果是否可自动提交；低于 `MIN_CONFIDENCE`（默认 `0.75`）时，插件会自动尝试后续 AI/本地 OCR，最后再转手动输入。请勿把 8088 端口映射到公网。
+
+## 方案二：OpenRouter 免费视觉模型
 
 OpenRouter 是聚合平台，注册免费，可用它上面的免费视觉模型。在 [openrouter.ai](https://openrouter.ai) 注册后进入 [API Keys](https://openrouter.ai/settings/keys) 创建 Key，然后在 LuCI 页面填写：
 
@@ -38,7 +57,7 @@ OpenRouter 是聚合平台，注册免费，可用它上面的免费视觉模型
 
 > 注意：OpenRouter 免费模型会不定期上下架，若提示模型不存在，可在 [模型列表](https://openrouter.ai/models?q=:free) 里筛选支持 Vision 的 `:free` 模型替换。
 
-## 方案二：Google Gemini 官方免费额度
+## 方案三：Google Gemini 官方免费额度
 
 Google AI Studio 提供免费 Key（每天约 1500 次请求，视觉能力强）。在 [aistudio.google.com](https://aistudio.google.com/apikey) 免费创建 Key 后填写：
 
@@ -46,7 +65,7 @@ Google AI Studio 提供免费 Key（每天约 1500 次请求，视觉能力强�
 - Model：`gemini-2.5-flash`
 - API Key：你的 Gemini Key
 
-## 方案三：通义千问 VL（阿里云百炼，国内直连）
+## 方案四：通义千问 VL（阿里云百炼，国内直连）
 
 新用户有免费额度，国内网络直连无需代理。在 [阿里云百炼](https://bailian.console.aliyun.com/) 开通并创建 API Key 后填写：
 
@@ -54,7 +73,7 @@ Google AI Studio 提供免费 Key（每天约 1500 次请求，视觉能力强�
 - Model：`qwen-vl-plus`（或 `qwen-vl-max`）
 - API Key：你的百炼 API Key
 
-## 方案四：Agnes（默认）
+## 方案五：Agnes（默认）
 
 - Base URL：`https://apihub.agnes-ai.com/v1`
 - Model：`agnes-2.5-flash`
