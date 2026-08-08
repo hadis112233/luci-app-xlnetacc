@@ -1,7 +1,7 @@
 # luci-app-xlnetacc
 适用于 OpenWRT/LEDE 纯Shell实现的迅雷快鸟客户端
 
-依赖（安装包自动安装）：openssl-util、tesseract（本地 OCR）、imagemagick（验证码图片去噪预处理）
+依赖（安装包自动安装）：openssl-util、wget-ssl、ca-bundle、coreutils-od、tesseract（本地 OCR）、imagemagick（验证码图片去噪预处理）
 
 
 更新到支持快鸟新协议 300
@@ -12,7 +12,7 @@
 * 增加验证码获取，解决 "为了您的帐号安全，请输入图形验证码[6]" 问题，不建议开启帐号重新登录
 * 适配高版本 OpenWRT
 * 支持配置 ChatGPT 验证码识别（默认 Agnes（agnes-2.5-flash），未配置 API Key 时使用手动输入）
-* 支持本地 OCR 识别：安装包会自动依赖 tesseract（本地优先离线识别），识别失败自动回退 AI 服务/手动输入
+* 支持本地 OCR 识别：安装包会自动依赖 tesseract；配置 API Key 时优先使用 AI，识别失败自动回退本地 OCR/手动输入
 
 # 验证码识别配置（免费方案）
 
@@ -21,6 +21,10 @@
 **AI 服务（配置了 API Key）-> 本地 tesseract OCR -> 手动输入**
 
 识别前会自动对验证码图片做去噪预处理（放大 + 灰度 + 阈值去除干扰线，依赖 ImageMagick，安装包已自动带上），能明显提升识别率。
+
+自动识别最多提交 5 次；无论是“未识别出字符”还是“识别结果被服务器拒绝”都会计入上限，之后自动切换为手动输入，避免连续错误提交。
+
+> 登录和 AI 请求会校验证书。迅雷现有的部分历史提速接口仅提供 HTTP，这是服务端协议限制；请避免在不可信网络中使用，直到迅雷提供 HTTPS 接口。
 
 ## 方案一：OpenRouter 免费视觉模型（推荐）
 
