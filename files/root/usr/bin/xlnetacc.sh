@@ -213,34 +213,6 @@ swjsq_get_verify_code() {
 	[ -n "$key" ] && [ -s "$image_file" ]
 }
 
-# 为本地 OCR 生成多种增强图。快鸟验证码的字符与干扰线颜色会变化，
-# 不能只用一个固定阈值；AI 则应始终接收原图，避免二值化丢失颜色细节。
-xlnetacc_prepare_ocr_images() {
-	local src=$1
-	[ -s "$src" ] || return 1
-	local conv
-	if command -v convert >/dev/null 2>&1; then
-		conv=convert
-	elif command -v magick >/dev/null 2>&1; then
-		conv=magick
-	fi
-	if [ -n "$conv" ]; then
-		local gray_file="/tmp/xlnetacc_verify_ocr_gray.png"
-		local dark_file="/tmp/xlnetacc_verify_ocr_dark.png"
-		local light_file="/tmp/xlnetacc_verify_ocr_light.png"
-		# 灰度保留全部笔画；dark/light 两张图分别保留深色和浅色字符。
-		$conv "$src" -colorspace Gray -auto-level -filter Lanczos -resize 400% -bordercolor White -border 12x12 "$gray_file" 2>/dev/null
-		$conv "$src" -colorspace Gray -auto-level -filter Lanczos -resize 400% -threshold 55% -bordercolor White -border 12x12 "$dark_file" 2>/dev/null
-		$conv "$src" -colorspace Gray -filter Lanczos -resize 400% -threshold 58% -negate -bordercolor White -border 12x12 "$light_file" 2>/dev/null
-		[ -s "$gray_file" ] && echo "$gray_file"
-		[ -s "$dark_file" ] && echo "$dark_file"
-		[ -s "$light_file" ] && echo "$light_file"
-		[ -s "$gray_file" ] || [ -s "$dark_file" ] || [ -s "$light_file" ]
-		return
-	fi
-	echo "$src"
-}
-
 # 规范化验证码：只保留字母数字并统一转大写（快鸟验证码为4位字母数字混合，不区分大小写）
 xlnetacc_normalize_code() {
 	echo "$1" | tr -dc 'A-Za-z0-9' | tr 'a-z' 'A-Z'
@@ -290,48 +262,6 @@ xlnetacc_lan_ocr_recognize() {
 		return 0
 	fi
 	_log "局域网 OCR 未达提交条件（默认: ${default_code:-无}/${default_confidence:-0}；Beta: ${beta_code:-无}/${beta_confidence:-0}；一致结果置信度: ${confidence:-0}），改用后续识别方式"
-	return 1
-}
-
-# 从多张增强图和多种版面模式中取得一致结果。
-# 仅有一次识别出的 4 位字符串并不可信，因此至少两次结果一致才自动提交。
-xlnetacc_local_ocr() {
-	local image_file=$1 ocr_images ocr_image psm ocr_code
-	local candidates="" seen="" candidate count best_code="" best_count=0
-	ocr_images=$(xlnetacc_prepare_ocr_images "$image_file") || return 1
-	[ -n "$ocr_images" ] || return 1
-
-	for ocr_image in $ocr_images; do
-		for psm in 7 8 13; do
-			ocr_code=$(tesseract "$ocr_image" stdout --psm "$psm" \
-				-c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ \
-				-c load_system_dawg=0 -c load_freq_dawg=0 2>/dev/null)
-			ocr_code=$(xlnetacc_normalize_code "$ocr_code")
-			[ "${#ocr_code}" -eq 4 ] && candidates="$candidates $ocr_code"
-		done
-	done
-
-	for candidate in $candidates; do
-		case " $seen " in
-			*" $candidate "*) continue ;;
-		esac
-		seen="$seen $candidate"
-		count=0
-		for ocr_code in $candidates; do
-			[ "$ocr_code" = "$candidate" ] && count=$((count + 1))
-		done
-		if [ "$count" -gt "$best_count" ]; then
-			best_code=$candidate
-			best_count=$count
-		fi
-	done
-
-	if [ "$best_count" -ge 2 ]; then
-		_log "本地 OCR 多路识别一致（${best_count}次）: $best_code"
-		echo -n "$best_code"
-		return 0
-	fi
-	[ -n "$candidates" ] && _log "本地 OCR 结果不一致，改为手动输入以避免错误重试" || _log "本地 OCR 识别失败"
 	return 1
 }
 
@@ -434,7 +364,7 @@ xlnetacc_ai_recognize() {
 	return 0
 }
 
-# 识别验证码：优先局域网 ddddocr，其次 AI（使用原始图），最后本地 tesseract OCR 多路校验
+# 识别验证码：优先局域网 ddddocr，其次 AI（使用原始图），失败后手动输入。
 swjsq_recognize() {
 	local image_file=$1
 	[ -s "$image_file" ] || return 1
@@ -461,24 +391,6 @@ swjsq_recognize() {
 		fi
 	fi
 
-	# 3) 本地 OCR（tesseract），自动定位 tessdata 目录
-	if command -v tesseract >/dev/null 2>&1; then
-		if [ -z "$TESSDATA_PREFIX" ] || [ ! -f "$TESSDATA_PREFIX/eng.traineddata" ]; then
-			for tessdata_dir in /usr/share/tessdata /usr/share/tesseract/tessdata /usr/share/tesseract-ocr/4.00/tessdata /usr/share/tesseract-ocr/5/tessdata /usr/lib/tesseract/tessdata; do
-				if [ -f "$tessdata_dir/eng.traineddata" ]; then
-					export TESSDATA_PREFIX="$tessdata_dir"
-					break
-				fi
-			done
-		fi
-		local ocr_code
-		ocr_code=$(xlnetacc_local_ocr "$image_file")
-		if [ -n "$ocr_code" ]; then
-			echo -n "$ocr_code"
-			return 0
-		fi
-	fi
-
 	return 2
 }
 # 自动识别验证码并重试登录
@@ -488,7 +400,7 @@ swjsq_auto_verify() {
 	local image_file="/tmp/xlnetacc_verify.jpg"
 	local max_retry=5
 
-	if ! command -v tesseract >/dev/null 2>&1 && [ -z "$chatgpt_api_key" ] && [ -z "$lan_ocr_url" ]; then
+	if [ -z "$chatgpt_api_key" ] && [ -z "$lan_ocr_url" ]; then
 		return 1
 	fi
 	while [ "$captcha_auto_retry" -lt "$max_retry" ]; do
@@ -584,8 +496,8 @@ swjsq_login() {
 			local wait_time=180
 			local code_file="/tmp/xlnetacc_verify_code"
 			rm -f "$code_file"
-			if ! command -v tesseract >/dev/null 2>&1 && [ -z "$chatgpt_api_key" ] && [ -z "$lan_ocr_url" ]; then
-				_log "未检测到本地 OCR（tesseract），且未配置 AI API Key 或局域网 OCR 地址，使用手动输入模式"
+			if [ -z "$chatgpt_api_key" ] && [ -z "$lan_ocr_url" ]; then
+				_log "未配置 AI API Key 或局域网 OCR 地址，使用手动输入模式"
 			else
 				swjsq_auto_verify "${verify_type:-MEA}"
 				[ $? -eq 0 ] && return 0

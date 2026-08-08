@@ -126,8 +126,8 @@ msgstr "无日志数据。"
 
 msgid "Error get log data."
 msgstr "获取日志数据失败。"
-msgid "Recognition order: LAN ddddocr (when configured) -> AI service (when API Key is set, receives original image) -> local tesseract OCR (multiple enhanced images; submits only when results agree) -> manual input."
-msgstr "识别顺序：局域网 ddddocr（配置后）-> AI 服务（配置了 API Key 时，使用原图）-> 本地 tesseract OCR（多种增强图；结果一致才提交）-> 手动输入。"
+msgid "Recognition order: LAN ddddocr (when configured) -> AI service (when API Key is set, receives original image) -> manual input."
+msgstr "识别顺序：局域网 ddddocr（配置后）-> AI 服务（配置了 API Key 时，使用原图）-> 手动输入。"
 
 msgid "LAN OCR -> AI service -> Local OCR -> manual input"
 msgstr "局域网 OCR -> AI 服务 -> 本地 OCR -> 手动输入"

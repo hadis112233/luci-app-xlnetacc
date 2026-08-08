@@ -1,7 +1,7 @@
 # luci-app-xlnetacc
 适用于 OpenWRT/LEDE 纯Shell实现的迅雷快鸟客户端
 
-依赖（安装包自动安装）：openssl-util、ca-bundle、tesseract（本地 OCR）、imagemagick（验证码图片去噪预处理）。HTTP 客户端优先使用 `wget-ssl`，精简固件中会自动回退到系统 `wget`。
+依赖（安装包自动安装）：openssl-util、ca-bundle。HTTP 客户端优先使用 `wget-ssl`，精简固件中会自动回退到系统 `wget`。
 
 
 更新到支持快鸟新协议 300
@@ -12,15 +12,15 @@
 * 增加验证码获取，解决 "为了您的帐号安全，请输入图形验证码[6]" 问题，不建议开启帐号重新登录
 * 适配高版本 OpenWRT
 * 支持配置 ChatGPT 验证码识别（默认 Agnes（agnes-2.5-flash），未配置 API Key 时使用手动输入）
-* 支持本地 OCR 识别：安装包会自动依赖 tesseract；配置 API Key 时优先使用 AI，识别失败自动回退本地 OCR/手动输入
+* 支持局域网 ddddocr 或 AI 视觉模型识别；未识别成功时进入手动输入
 
 # 验证码识别配置（免费方案）
 
 快鸟登录遇到 "为了您的帐号安全，请输入图形验证码[6]" 时，插件会按以下顺序自动识别：
 
-**局域网 ddddocr（配置后）-> AI 服务（配置了 API Key）-> 本地 tesseract OCR -> 手动输入**
+**局域网 ddddocr（配置后）-> AI 服务（配置了 API Key）-> 手动输入**
 
-AI 服务接收原始图像；本地 tesseract 会使用多种增强图，并且至少两次结果一致才自动提交，避免单次误识别造成错误重试。
+局域网 ddddocr 与 AI 服务均接收原始图像；未达提交条件或识别失败时，会自动进入手动输入，避免错误重试。
 
 自动识别最多提交 5 次；无论是“未识别出字符”还是“识别结果被服务器拒绝”都会计入上限，之后自动切换为手动输入，避免连续错误提交。
 
@@ -85,7 +85,7 @@ Google AI Studio 提供免费 Key（每天约 1500 次请求，视觉能力强�
 
 ## 手动输入模式
 
-不填 API Key（且本地未装 tesseract 时）自动进入手动模式：浏览器打开
+未配置局域网 OCR 地址和 AI API Key 时，自动进入手动模式：浏览器打开
 `http://<路由器IP>/luci-static/resources/xlnetacc_verify.jpg` 查看验证码，
 在 180 秒内执行 `echo 'xxxx' > /tmp/xlnetacc_verify_code` 即可。
 
