@@ -242,6 +242,12 @@ xlnetacc_ai_recognize() {
 
 	local endpoint="${chatgpt_base_url:-https://apihub.agnes-ai.com/v1}"
 	case "$endpoint" in
+		*://*://*)
+			_log "验证码识别 Base URL 格式无效：包含重复协议地址，请重新保存配置"
+			return 1
+			;;
+	esac
+	case "$endpoint" in
 		*/chat/completions) ;;
 		*/) endpoint="${endpoint}chat/completions";;
 		*) endpoint="${endpoint%/}/chat/completions";;
@@ -388,6 +394,8 @@ swjsq_auto_verify() {
 			swjsq_login --captcha-retry
 			[ $? -eq 0 ] && return 0
 			[ "${lasterr:-}" != 6 ] && return 1
+			# 已提交但被拒绝的旧验证码不能留给随后进入的手动模式。
+			rm -f "$code_file"
 			[ "$captcha_auto_retry" -ge "$max_retry" ] && break
 			_log "自动识别的验证码无效 (第${captcha_auto_retry}次)，重新获取验证码"
 		else
